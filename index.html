@@ -250,6 +250,8 @@
   .mc-ans label{display:flex;align-items:center;gap:4px;cursor:pointer;}
   .mc-result{margin-top:10px;font-size:0.85rem;font-weight:600;}
   .mc-result.ok{color:var(--green);} .mc-result.bad{color:var(--red);} .mc-result.pending{color:var(--muted);}
+  /* ---- v4.0: auto-fill notes ---- */
+  .auto-note{background:#F1F9F8;border:1px solid #BFE0DE;border-radius:8px;padding:10px 14px;font-size:0.82rem;color:#0B4F4E;margin-bottom:14px;line-height:1.5;}
 </style>
 </head>
 <body>
@@ -314,7 +316,7 @@
     </div>
 
     <div class="field">
-      <label class="flabel">3. If single-specialty / stand-alone centre, choose one of the options below <strong>Work In Progress</strong> <span class="req">*</span></label>
+      <label class="flabel">3. If single-specialty / stand-alone centre <strong>“Work in Progress”</strong>, choose one of the options below <span class="req">*</span></label>
       <select id="singleType"></select>
     </div>
     <div class="field hidden" id="othersSpecifyWrap">
@@ -452,7 +454,7 @@
   <div class="card step hidden" data-step="7">
     <div class="step-title">Section IV <span class="weight-chip">15 pts</span></div>
     <div class="step-heading">Location / Geography</div>
-    <div class="step-desc">As per CGHS city tiers.</div>
+    <div class="step-desc">As per CGHS city tiers. Auto-filled from the State and District entered in Section I.</div>
     <div id="geoContainer"></div>
     <div id="geoReference"></div>
     <div class="btn-row">
@@ -631,10 +633,12 @@ const BAND_RULES = [
   { code:"D", cls:"D", min:0, max:39, note:"" },
 ];
 
-// ---- Section III: Quality & Accreditation (35 pts) — PPT slide 15 / docx §III ----
+// ---- Section III: Quality & Accreditation (35 pts) ----
+// v4.0: the accreditation options below are shown only after the organisation answers
+// "Yes" to "Does the healthcare organisation have a valid accreditation?".
+// "No" opens the minimum-criteria checklist M1–M11 instead (up to 7 pts).
 const QUALITY_SUBPARAMS = [
   { id:"accreditation", name:"Valid accreditation held", cap:20, options:[
-    {label:"No valid accreditation (answer the minimum criteria M1–M11 below)", pts:0, minCriteria:true},
     {label:"Entry-level NABH", pts:10},
     {label:"Full NABH (without NABL)", pts:16},
     {label:"Full NABH + NABL accreditation", pts:19},
@@ -687,12 +691,64 @@ const GEO_OPTIONS = [
   {label:"Tier-III / Remote (CGHS Tier III)", pts:7},
 ];
 
-// ---- Geography reference table — CGHS city tiers (CGHS OM dated 03.10.2025) ----
+// ---- Geography reference table — CGHS city tiers (CGHS OM dated 03.10.2025, with clarification dated 09.10.2025) ----
 const GEO_REFERENCE = [
-  { tier:"Metro (15 pts)", def:"CGHS Tier I (X) cities — urban agglomerations", cities:"Delhi, Mumbai, Kolkata, Chennai, Bengaluru, Hyderabad, Ahmedabad, Pune", source:"CGHS OM dated 03.10.2025, Annexure I Part A" },
-  { tier:"Tier-II (10 pts)", def:"CGHS Tier II (Y) cities. CGHS also rates the North-East and the UTs of J&K and Ladakh as Tier II", cities:"As listed in the CGHS OM, Annexure I Part B", source:"CGHS OM dated 03.10.2025, para 2(c)" },
+  { tier:"Metro (15 pts)", def:"CGHS Tier I (X) cities — urban agglomerations. Faridabad, Ghaziabad, Noida and Gurugram are treated at par with Delhi", cities:"Delhi, Mumbai, Kolkata, Chennai, Bengaluru, Hyderabad, Ahmedabad, Pune (+ Faridabad, Ghaziabad, Noida, Gurugram)", source:"CGHS OM dated 03.10.2025, Annexure I Part A; CGHS OM dated 09.10.2025" },
+  { tier:"Tier-II (10 pts)", def:"CGHS Tier II (Y) cities. CGHS also rates the North-East and the UTs of J&K and Ladakh as Tier II; Goa, Port Blair, Panchkula and Mohali are also mapped to Tier II", cities:"As listed in the CGHS OM, Annexure I Part B", source:"CGHS OM dated 03.10.2025, para 2(c); CGHS OM dated 09.10.2025" },
   { tier:"Tier-III / Remote (7 pts)", def:"CGHS Tier III (Z): all other cities and towns, including remote locations", cities:"All locations not listed as Tier I or Tier II", source:"CGHS OM dated 03.10.2025, para 2(c)" },
 ];
+
+// ---- Location -> CGHS tier auto-fill (matched on the State and District chosen in Section I) ----
+// "*" = every district of that state / UT. Districts are matched by the exact names in STATE_DISTRICTS.
+// This is a district-level approximation of the CGHS city lists: the applicant can always change the suggestion.
+const TIER_I_MAP = {
+  "Delhi (NCT)": "*",
+  "Maharashtra": ["Mumbai City","Mumbai Suburban","Pune"],
+  "West Bengal": ["Kolkata","Howrah"],
+  "Tamil Nadu": ["Chennai"],
+  "Karnataka": ["Bengaluru (Bangalore) Urban"],
+  "Telangana": ["Hyderabad"],
+  "Gujarat": ["Ahmedabad"],
+  "Haryana": ["Faridabad","Gurgaon"],
+  "Uttar Pradesh": ["Ghaziabad","Gautam Buddha Nagar"],
+};
+const TIER_II_MAP = {
+  // whole state / UT — CGHS para 2(c) and OM dated 09.10.2025
+  "Arunachal Pradesh":"*","Assam":"*","Manipur":"*","Meghalaya":"*","Mizoram":"*","Nagaland":"*","Sikkim":"*","Tripura":"*",
+  "Jammu and Kashmir (UT)":"*","Ladakh (UT)":"*","Goa":"*","Chandigarh (UT)":"*",
+  // district level
+  "Andaman and Nicobar Islands (UT)":["South Andaman"],
+  "Andhra Pradesh":["Visakhapatnam","NTR","Guntur","Sri Potti Sriramulu Nellore"],
+  "Telangana":["Warangal (Rural)","Warangal (Urban)"],
+  "Bihar":["Patna"],
+  "Chhattisgarh":["Raipur","Durg"],
+  "Gujarat":["Rajkot","Jamnagar","Bhavnagar","Vadodara","Surat"],
+  "Haryana":["Panchkula"],
+  "Jharkhand":["Ranchi","Dhanbad","East Singhbhum"],
+  "Karnataka":["Mysuru (Mysore)","Dharwad","Dakshina Kannada","Belagavi (Belgaum)","Kalaburagi (Gulbarga)"],
+  "Kerala":["Thiruvananthapuram","Ernakulam","Kozhikode","Kollam","Thrissur","Malappuram","Kannur"],
+  "Madhya Pradesh":["Bhopal","Indore","Jabalpur","Gwalior"],
+  "Maharashtra":["Nagpur","Nashik","Aurangabad","Solapur","Kolhapur","Amravati","Nanded","Sangli","Thane","Palghar"],
+  "Odisha":["Khordha","Cuttack","Sundargarh"],
+  "Puducherry (UT)":["Pondicherry"],
+  "Punjab":["Ludhiana","Amritsar","Jalandhar","Sahibzada Ajit Singh Nagar (Mohali)"],
+  "Rajasthan":["Jaipur","Jodhpur","Kota","Bikaner","Ajmer"],
+  "Tamil Nadu":["Coimbatore","Madurai","Salem","Tiruchirappalli","Tirunelveli","Tiruppur","Erode"],
+  "Uttar Pradesh":["Lucknow","Kanpur Nagar","Varanasi","Agra","Meerut","Allahabad","Bareilly","Aligarh","Moradabad","Gorakhpur","Saharanpur"],
+  "Uttarakhand":["Dehradun"],
+  "West Bengal":["Burdwan (Bardhaman)","Darjeeling"],
+};
+function tierMatch(map, st, d){
+  const v = map[st];
+  return v === "*" || (Array.isArray(v) && v.indexOf(d) !== -1);
+}
+// returns an index into GEO_OPTIONS: 0 = Tier I, 1 = Tier II, 2 = Tier III
+function suggestGeoIdx(st, d){
+  if(!st || !d) return null;
+  if(tierMatch(TIER_I_MAP, st, d)) return 0;
+  if(tierMatch(TIER_II_MAP, st, d)) return 1;
+  return 2;
+}
 
 // ---- India State/District list (source: community-maintained dataset,
 // patched for J&K/Ladakh split, DNH+DD merger, A&N Islands, and AP's
@@ -711,7 +767,7 @@ const STATE_DISTRICTS = {
   "Goa": ["North Goa", "South Goa"],
   "Gujarat": ["Ahmedabad", "Amreli", "Anand", "Aravalli", "Banaskantha (Palanpur)", "Bharuch", "Bhavnagar", "Botad", "Chhota Udepur", "Dahod", "Dangs (Ahwa)", "Devbhoomi Dwarka", "Gandhinagar", "Gir Somnath", "Jamnagar", "Junagadh", "Kachchh", "Kheda (Nadiad)", "Mahisagar", "Mehsana", "Morbi", "Narmada (Rajpipla)", "Navsari", "Panchmahal (Godhra)", "Patan", "Porbandar", "Rajkot", "Sabarkantha (Himmatnagar)", "Surat", "Surendranagar", "Tapi (Vyara)", "Vadodara", "Valsad"],
   "Haryana": ["Ambala", "Bhiwani", "Charkhi Dadri", "Faridabad", "Fatehabad", "Gurgaon", "Hisar", "Jhajjar", "Jind", "Kaithal", "Karnal", "Kurukshetra", "Mahendragarh", "Mewat", "Palwal", "Panchkula", "Panipat", "Rewari", "Rohtak", "Sirsa", "Sonipat", "Yamunanagar"],
-  "Himachal Pradesh": ["Bilaspur", "Chamba", "Hamirpur", "Kangra", "Kinnaur", "Kullu", "Lahaul &amp; Spiti", "Mandi", "Shimla", "Sirmaur (Sirmour)", "Solan", "Una"],
+  "Himachal Pradesh": ["Bilaspur", "Chamba", "Hamirpur", "Kangra", "Kinnaur", "Kullu", "Lahaul & Spiti", "Mandi", "Shimla", "Sirmaur (Sirmour)", "Solan", "Una"],
   "Jammu and Kashmir (UT)": ["Anantnag", "Bandipora", "Baramulla", "Budgam", "Doda", "Ganderbal", "Jammu", "Kathua", "Kishtwar", "Kulgam", "Kupwara", "Poonch", "Pulwama", "Rajouri", "Ramban", "Reasi", "Samba", "Shopian", "Srinagar", "Udhampur"],
   "Jharkhand": ["Bokaro", "Chatra", "Deoghar", "Dhanbad", "Dumka", "East Singhbhum", "Garhwa", "Giridih", "Godda", "Gumla", "Hazaribag", "Jamtara", "Khunti", "Koderma", "Latehar", "Lohardaga", "Pakur", "Palamu", "Ramgarh", "Ranchi", "Sahibganj", "Seraikela-Kharsawan", "Simdega", "West Singhbhum"],
   "Karnataka": ["Bagalkot", "Ballari (Bellary)", "Belagavi (Belgaum)", "Bengaluru (Bangalore) Rural", "Bengaluru (Bangalore) Urban", "Bidar", "Chamarajanagar", "Chikballapur", "Chikkamagaluru (Chikmagalur)", "Chitradurga", "Dakshina Kannada", "Davangere", "Dharwad", "Gadag", "Hassan", "Haveri", "Kalaburagi (Gulbarga)", "Kodagu", "Kolar", "Koppal", "Mandya", "Mysuru (Mysore)", "Raichur", "Ramanagara", "Shivamogga (Shimoga)", "Tumakuru (Tumkur)", "Udupi", "Uttara Kannada (Karwar)", "Vijayapura (Bijapur)", "Yadgir"],
@@ -738,102 +794,35 @@ const STATE_DISTRICTS = {
 };
 
 
-// ---- Section V: Digital Maturity (10 pts) — PPT slide 17 / docx §V ----
+// ---- Section V: Digital Maturity (10 pts) ----
+// v4.0: HMIS (5) + HFR ID (2) + HPR (2) + NABH Digital Health Standards (1) = 10
 const DIGITAL_SUBPARAMS = [
- {
-  "id": "d5_1",
-  "name": "HMIS / records & information management",
-  "cap": 4,
-  "options": [
-   {
-    "label": "Paper-based records",
-    "pts": 0
-   },
-   {
-    "label": "Billing-driven HMIS",
-    "pts": 1
-   },
-   {
-    "label": "Centralised HIS with access control",
-    "pts": 2
-   },
-   {
-    "label": "Integrated clinical records (EMR) across departments",
-    "pts": 3
-   },
-   {
-    "label": "Plus backup / continuity controls, audit trail and annual review",
-    "pts": 4
-   }
-  ]
- },
- {
-  "id": "d5_2",
-  "name": "ABDM Health Facility Registry (HFR) ID",
-  "cap": 2,
-  "options": [
-   {
-    "label": "Not held",
-    "pts": 0
-   },
-   {
-    "label": "HFR ID held and verified",
-    "pts": 2
-   }
-  ]
- },
- {
-  "id": "d5_3",
-  "name": "ABDM M3-compliant software",
-  "cap": 2,
-  "options": [
-   {
-    "label": "Not compliant",
-    "pts": 0
-   },
-   {
-    "label": "M3-compliant, evidence attached",
-    "pts": 2
-   }
-  ]
- },
- {
-  "id": "d5_4",
-  "name": "Doctors registered on HPR",
-  "cap": 1,
-  "options": [
-   {
-    "label": "No / not evidenced",
-    "pts": 0
-   },
-   {
-    "label": "HPR IDs for listed specialists",
-    "pts": 1
-   }
-  ]
- },
- {
-  "id": "d5_5",
-  "name": "NABH Digital Health Standards (HIS/EMR) certification",
-  "cap": 1,
-  "options": [
-   {
-    "label": "None",
-    "pts": 0
-   },
-   {
-    "label": "Certified",
-    "pts": 1
-   }
-  ]
- }
+  { id:"d5_1", name:"HMIS / records & information management", cap:5, options:[
+    {label:"Manual paper-based records", pts:0},
+    {label:"Billing-driven HMIS", pts:2},
+    {label:"Centralised HIS with access control", pts:3},
+    {label:"Integrated clinical records (EMR) across departments", pts:4},
+    {label:"Plus backup / continuity controls, audit trail and annual review", pts:5},
+  ]},
+  { id:"d5_2", name:"ABDM Health Facility Registry (HFR) ID", cap:2, options:[
+    {label:"Not held", pts:0},
+    {label:"HFR ID held and verified", pts:2},
+  ]},
+  { id:"d5_3", name:"Doctors registered on HPR", cap:2, options:[
+    {label:"No", pts:0},
+    {label:"HPR IDs for listed specialists", pts:2},
+  ]},
+  { id:"d5_4", name:"NABH Digital Health Standards (HIS/EMR) certification", cap:1, options:[
+    {label:"None", pts:0},
+    {label:"Certified", pts:1},
+  ]},
 ];
 
 // ---- Section II: Capability (40 pts), branched by facility type ----
 // multi / super / small — PPT (primary base document)
 // single-specialty subtypes + diagnostic — docx v2.1 (used only for these)
 const CAPABILITY = {
-  multi: { label:"Multi-Specialty Hospital (100-200 registered beds)", source:"Framework v3.2", subparams:[
+  multi: { label:"Multi-Specialty Hospital (100-200 registered beds)", source:"Framework v4.0", subparams:[
     { id:"s2_1", name:"Emergency & stabilisation", cap:6, options:[{"label":"No on-site emergency capability; documented transfer pathway only","pts":0},{"label":"Stabilisation with emergency drugs/equipment; doctor on call","pts":2},{"label":"24x7 doctor on site, triage, emergency bed(s), minor-procedure room","pts":4},{"label":"24x7 emergency team with OT and ICU/HDU backup on site","pts":6}] },
     { id:"s2_2", name:"Operation theatre & anaesthesia", cap:5, options:[{"label":"No surgical service","pts":0},{"label":"Minor OT only","pts":2},{"label":"Major OT with anaesthesia and recovery","pts":4},{"label":"Multiple OTs with CSSD and documented surgical-safety checklist","pts":5}] },
     { id:"s2_3", name:"Critical care", cap:5, options:[{"label":"None; documented transfer pathway","pts":0},{"label":"HDU / monitored beds","pts":2},{"label":"ICU with ventilator, piped oxygen, qualified staff","pts":4},{"label":"ICU with ABG, infusion pumps, power back-up and isolation capability","pts":5}] },
@@ -841,28 +830,28 @@ const CAPABILITY = {
     { id:"s2_5", name:"Imaging", cap:2, options:[{"label":"None / outsourced","pts":0},{"label":"X-ray and ultrasound","pts":1},{"label":"Plus CT, with required regulatory approvals","pts":2}] },
     { id:"s2_6", name:"Pharmacy & blood storage", cap:2, options:[{"label":"Not 24x7 / outsourced","pts":0},{"label":"24x7 in-house pharmacy (licensed)","pts":1},{"label":"Plus licensed blood storage unit","pts":2}] },
     { id:"s2_7", name:"Registered bed capacity", cap:6, beds:true, options:[{"label":"Fewer than 30","pts":0,"rng":[0,29]},{"label":"30-49","pts":2,"rng":[30,49]},{"label":"50-99","pts":4,"rng":[50,99]},{"label":"100 or more","pts":6,"rng":[100,1000000000]}] },
-    { id:"s2_8", name:"Staffing: doctors and nurses against beds", cap:6, options:[{"label":"Roster not evidenced","pts":0},{"label":"Meets CEA role-wise minimum for declared level","pts":2},{"label":"Meets CEA minimum, qualified doctor 24x7, nurse per shift per INC norms","pts":4},{"label":"Also meets IPHS equivalent-level HR norm","pts":6}] },
-    { id:"s2_9", name:"Specialist availability", cap:4, options:[{"label":"Visiting only","pts":0},{"label":"One or two specialties with full-time consultant","pts":2},{"label":"Three specialties with full-time consultants","pts":4}] },
-    { id:"s2_10", name:"Referral & continuity of care", cap:2, options:[{"label":"None","pts":0},{"label":"Informal arrangement","pts":1},{"label":"Formal written tie-up with higher centre and transfer protocol","pts":2}] },
+    { id:"s2_8", name:"Staffing: doctors and nurses against beds", cap:6, options:[{"label":"Lack of validated and qualified staff 24x7","pts":0},{"label":"Meets CEA/IPHS role-wise minimum staffing requirements","pts":3},{"label":"Meets CEA minimum, qualified doctor 24x7, nurse per shift per INC norms","pts":4},{"label":"Comprehensive Compliance (Staffing plan validated against NABH HRM standards for qualification, credentialing, and deployment)","pts":6}] },
+    { id:"s2_9", name:"Specialist coverage", cap:4, options:[{"label":"Visiting only","pts":2},{"label":"More than two full-time specialties","pts":3},{"label":"More than 4 full-time specialties","pts":4}] },
+    { id:"s2_10", name:"Referral & continuity of care", cap:2, options:[{"label":"Not present","pts":0},{"label":"Documented referral protocol with records","pts":2}] },
   ]},
-  super: { label:"Super-Specialty Chain of Hospitals (more than 200 registered beds)", source:"Framework v3.2", subparams:[
+  super: { label:"Super-Specialty Chain of Hospitals (more than 200 registered beds)", source:"Framework v4.0", subparams:[
     { id:"s2_1", name:"Emergency & critical care", cap:8, options:[{"label":"No structured service","pts":0},{"label":"Emergency only","pts":2},{"label":"Emergency + OT","pts":4},{"label":"Emergency + OT + ICU","pts":6},{"label":"ICU/HDU + multiple OTs + CSSD + blood bank on site","pts":8}] },
-    { id:"s2_2", name:"In-house super-specialty depth", cap:10, note:"Count of CGHS-listed super-specialties delivered IN-HOUSE (tie-ups/outsourced do not count)", options:[{"label":"None or one","pts":0},{"label":"Two to three","pts":2},{"label":"Four to five","pts":4},{"label":"Six to seven","pts":6},{"label":"Eight or more","pts":10}] },
+    { id:"s2_2", name:"In-house Super-Specialty Services", cap:10, note:"Count of CGHS-listed super-specialties delivered IN-HOUSE (tie-ups/outsourced do not count)", options:[{"label":"None or one","pts":0},{"label":"Two to three","pts":2},{"label":"Four to five","pts":4},{"label":"Six to seven","pts":6},{"label":"Eight or more","pts":10}] },
     { id:"s2_3", name:"Diagnostics & support", cap:8, options:[{"label":"Basic laboratory only","pts":0},{"label":"Comprehensive in-house laboratory","pts":2},{"label":"Plus CT/MRI with approvals","pts":4},{"label":"Plus licensed blood bank","pts":5},{"label":"Plus 24x7 pharmacy","pts":6},{"label":"Plus cath lab / interventional radiology","pts":8}] },
     { id:"s2_4", name:"Registered bed capacity", cap:7, beds:true, options:[{"label":"Fewer than 100","pts":0,"rng":[0,99]},{"label":"100-199","pts":2,"rng":[100,199]},{"label":"200-349","pts":4,"rng":[200,349]},{"label":"350-499","pts":6,"rng":[350,499]},{"label":"500 or more","pts":7,"rng":[500,1000000000]}] },
-    { id:"s2_5", name:"Staffing: doctors and nurses against beds", cap:7, options:[{"label":"Roster not evidenced","pts":0},{"label":"Meets CEA Level 3 minimum","pts":2},{"label":"Plus qualified doctor 24x7 and nurse per shift","pts":5},{"label":"Also meets IPHS equivalent-level norm","pts":7}] },
+    { id:"s2_5", name:"Staffing: doctors and nurses against beds", cap:7, options:[{"label":"Lack of validated and qualified staff 24x7","pts":0},{"label":"Meets CEA/IPHS role-wise minimum staffing requirements","pts":2},{"label":"Meets CEA Level 3 minimum + qualified doctor 24x7 and nurse per shift","pts":4},{"label":"Meets NABH standards (Validated HR Plan based on patient acuity/workload + 100% credentialed/privileged clinical staff)","pts":7}] },
   ]},
-  small: { label:"Small Hospitals (fewer than 100 registered beds)", source:"Framework v3.2", subparams:[
+  small: { label:"Small Hospitals (fewer than 100 registered beds)", source:"Framework v4.0", subparams:[
     { id:"s2_1", name:"Emergency", cap:4, options:[{"label":"None structured","pts":0},{"label":"Stabilisation, emergency drugs/equipment","pts":2},{"label":"24x7 doctor, triage, emergency bed","pts":4}] },
     { id:"s2_2", name:"Operation theatre & surgical capability", cap:5, options:[{"label":"None","pts":0},{"label":"Minor OT","pts":2},{"label":"Major OT with anaesthesia","pts":4},{"label":"Plus CSSD and surgical-safety checklist","pts":5}] },
-    { id:"s2_3", name:"ICU / HDU", cap:4, options:[{"label":"None","pts":0},{"label":"HDU / monitored beds","pts":2},{"label":"ICU with ventilator and qualified staff","pts":4}] },
-    { id:"s2_4", name:"Laboratory", cap:3, options:[{"label":"Collection only","pts":0},{"label":"Basic in-house","pts":1},{"label":"Extended in-house","pts":2},{"label":"Comprehensive incl. microbiology","pts":3}] },
+    { id:"s2_3", name:"ICU / NICU / PICU / SICU / HDU", cap:4, options:[{"label":"None","pts":0},{"label":"HDU / monitored beds","pts":2},{"label":"ICU with ventilator and qualified staff","pts":4}] },
+    { id:"s2_4", name:"Laboratory Services", cap:3, options:[{"label":"Outsourced / Collection only","pts":0},{"label":"Basic in-house","pts":1},{"label":"Extended in-house","pts":2},{"label":"Comprehensive incl. microbiology","pts":3}] },
     { id:"s2_5", name:"Imaging", cap:3, options:[{"label":"None","pts":0},{"label":"X-ray","pts":1},{"label":"X-ray + ultrasound","pts":2},{"label":"Plus CT or equivalent with approvals","pts":3}] },
-    { id:"s2_6", name:"Pharmacy & blood storage", cap:2, options:[{"label":"Not 24x7","pts":0},{"label":"24x7 licensed pharmacy","pts":1},{"label":"Plus blood storage unit","pts":2}] },
+    { id:"s2_6", name:"Pharmacy", cap:2, options:[{"label":"Non in-house pharmacy","pts":0},{"label":"In-house licensed but not 24x7","pts":1},{"label":"24x7 licensed pharmacy","pts":2}] },
     { id:"s2_7", name:"Registered bed capacity", cap:6, beds:true, options:[{"label":"Fewer than 30","pts":0,"rng":[0,29]},{"label":"30-49","pts":2,"rng":[30,49]},{"label":"50-74","pts":4,"rng":[50,74]},{"label":"75-100","pts":5,"rng":[75,100]},{"label":"More than 100","pts":6,"rng":[101,1000000000]}] },
-    { id:"s2_8", name:"Staffing: doctors and nurses against beds", cap:7, options:[{"label":"Roster not evidenced","pts":0},{"label":"Meets CEA role-wise minimum","pts":3},{"label":"Staffing plan validated against NABH HRM (qualification, credentialing, deployment)","pts":5},{"label":"Both, plus qualified doctor 24x7","pts":7}] },
-    { id:"s2_9", name:"Specialist coverage", cap:3, options:[{"label":"Visiting only","pts":0},{"label":"One full-time specialty","pts":1},{"label":"Two or more full-time specialties","pts":3}] },
-    { id:"s2_10", name:"Referral & continuity of care", cap:3, options:[{"label":"None","pts":0},{"label":"Informal","pts":1},{"label":"Formal tie-up and transfer protocol","pts":3}] },
+    { id:"s2_8", name:"Staffing", cap:7, options:[{"label":"Lack of validated and qualified staff 24x7","pts":0},{"label":"Meets CEA/IPHS role-wise minimum staffing requirements","pts":4},{"label":"Comprehensive Compliance (Staffing plan validated against NABH HRM standards for qualification, credentialing, and deployment)","pts":7}] },
+    { id:"s2_9", name:"Specialist coverage", cap:3, options:[{"label":"Visiting only","pts":1},{"label":"One full-time specialty","pts":2},{"label":"More than 2 full-time specialties","pts":3}] },
+    { id:"s2_10", name:"Referral & continuity of care", cap:2, options:[{"label":"Not present","pts":0},{"label":"Documented referral protocol with records","pts":2}] },
   ]},
   ayush: { label:"Exclusive AYUSH Hospital", source:"Framework v3.2", subparams:[
     { id:"s2_1", name:"Clinical services offered", cap:8, options:[{"label":"Not evidenced","pts":0},{"label":"OPD only","pts":2},{"label":"OPD + IPD","pts":4},{"label":"Plus Panchakarma","pts":6},{"label":"Plus specialised services (e.g. Ksharsutra) / integrative","pts":8}] },
@@ -954,6 +943,8 @@ let state = {
   singleSubtype: null,     // oncology | ophthalmology | ... (only if facilityType === 'single')
   othersSpecify: "",
   registeredBeds: null,
+  accGate: null,           // "Yes" | "No" — does the HCO hold a valid accreditation?
+  geoManualKey: null,      // "state|district" for which the user overrode the auto-filled tier
   answers: { capability:{}, quality:{}, geography:null, digital:{}, minCriteria:{} },
 };
 let currentStep = 0;
@@ -1124,22 +1115,17 @@ function renderCapabilitySection(){
 /* =========================================================================
    RENDER: Quality & Accreditation (Section III)
    ========================================================================= */
-function renderQualitySection(){
-  const container = document.getElementById("qualityContainer");
-  container.innerHTML = "";
-  QUALITY_SUBPARAMS.forEach(sp => renderSubparamBlock(container, sp, "qual", state.answers.quality));
-  setupQualityAutoScore(container);
-}
-
 /**
- * Accreditation-led auto-fill.
- *  - Full NABH (16), Full NABH + NABL (19) or + JCI (20) auto-select the top
- *    option for Infection Control, Clinical Governance and Patient Safety
- *    (5 + 5 + 5 = 15 pts).  Full NABH + NABL => 19 + 15 = 34 / 35;
- *    JCI => 20 + 15 = 35 / 35.  Any item can still be overridden manually.
- *  - "No valid accreditation" reveals the M1–M11 checklist (Yes / No / N/A, N/A
- *    counts as met). 8 or more met = 7 pts; otherwise 0 pts and the result reads
- *    "No valid accreditation — Not meeting minimum requirement".
+ * v4.0 flow
+ *  1. First question: "Does the healthcare organisation have a valid accreditation?"
+ *  2. Yes -> accreditation options (Entry-level NABH 10, Full NABH 16, Full NABH + NABL 19,
+ *            Full NABH + NABL + JCI 20).
+ *     No  -> Basic Minimum Requirement checklist M1–M11 (Yes / No / N/A, N/A counts as met):
+ *            8 or more met = 7 pts, otherwise 0 pts
+ *            ("No valid accreditation — Not meeting minimum requirement").
+ *  3. Infection control, Clinical governance and Patient safety are filled in manually for
+ *     "No valid accreditation" and "Entry-level NABH". From Full NABH onwards they are
+ *     auto-filled with the full points (Full NABH + NABL => 19 + 15 = 34 / 35; + JCI => 20 + 15 = 35 / 35).
  */
 function minCriteriaState(){
   const ans = state.answers.minCriteria || {};
@@ -1148,32 +1134,56 @@ function minCriteriaState(){
   const met = vals.filter(v => v === "Yes" || v === "N/A").length;
   return { answered, met, ok: answered && met >= MIN_THRESHOLD };
 }
-function minCriteriaIncomplete(){
-  const acc = state.answers.quality.accreditation;
-  return !!(acc && acc.minCriteria && !minCriteriaState().answered);
+// Returns an error message when Section III is incomplete, otherwise null
+function qualityGateMessage(){
+  if(!state.accGate) return "Please answer whether the healthcare organisation has a valid accreditation.";
+  const a = state.answers.quality.accreditation;
+  if(state.accGate === "Yes" && !a) return "Please select the accreditation held.";
+  if(state.accGate === "No" && !minCriteriaState().answered) return "Please answer all minimum-criteria items (M1–M11).";
+  return null;
 }
 
-function setupQualityAutoScore(container){
+function renderQualitySection(){
+  const container = document.getElementById("qualityContainer");
+  container.innerHTML = "";
+  state.answers.quality = {};
+  state.accGate = null;
+  setupQualitySection(container);
+}
+
+function setupQualitySection(container){
   const acc = QUALITY_SUBPARAMS.find(sp => sp.id === "accreditation");
-  const idxOf = fn => acc.options.findIndex(fn);
-  const minIdx  = idxOf(o => o.minCriteria);
-  const fullIdx = [ idxOf(o => o.label.indexOf("Full NABH (without") === 0),
-                    idxOf(o => o.label.indexOf("Full NABH + NABL accreditation") === 0),
-                    idxOf(o => o.label.indexOf("JCI") !== -1) ];
+  const rest = QUALITY_SUBPARAMS.filter(sp => sp.id !== "accreditation");
+  const fullIdx = acc.options.map((o,i) => /^Full NABH/.test(o.label) ? i : -1).filter(i => i >= 0);
   const targetIds = ["infectionControl", "clinicalGovernance", "patientSafety"];
-  const restMax = targetIds.reduce((s,id) => s + Math.max(...QUALITY_SUBPARAMS.find(x => x.id === id).options.map(o => o.pts)), 0);
-  const firstBlock = container.querySelector(".subparam");
+  const restMax = targetIds.reduce((s,id) => s + Math.max(...rest.find(x => x.id === id).options.map(o => o.pts)), 0);
+  let autoFilled = false;
+
+  // ---- 1. gate question ----
+  const gate = document.createElement("div");
+  gate.className = "subparam";
+  gate.innerHTML = `<div class="sp-head"><span class="sp-name">Does the healthcare organisation have a valid accreditation? <span class="req">*</span></span></div>
+    <div class="radio-yn">
+      <label><input type="radio" name="qualHasAcc" value="Yes"> Yes</label>
+      <label><input type="radio" name="qualHasAcc" value="No"> No</label>
+    </div>`;
+  container.appendChild(gate);
+
+  // ---- 2a. accreditation options (Yes) ----
+  const accWrap = document.createElement("div");
+  accWrap.className = "hidden";
+  container.appendChild(accWrap);
+  renderSubparamBlock(accWrap, acc, "qual", state.answers.quality);
 
   const note = document.createElement("div");
-  note.id = "qualAutoScoreNote";
   note.className = "banner-note hidden";
-  firstBlock.insertAdjacentElement("afterend", note);
+  container.appendChild(note);
 
-  // ---- minimum-criteria checklist ----
+  // ---- 2b. minimum-criteria checklist (No) ----
   const panel = document.createElement("div");
   panel.className = "minpanel hidden";
-  panel.innerHTML = `<h4>Minimum criteria (M1–M11)</h4>
-    <div class="mp-sub">Answer Yes, No or N/A for every item (N/A counts as met). ${MIN_THRESHOLD} or more Yes / N/A earns ${MIN_SCORE} points. With ${MIN_THRESHOLD - 1} or fewer the result is "No valid accreditation — Not meeting minimum requirement" and scores 0.</div>` +
+  panel.innerHTML = `<h4>Basic Minimum Requirement (M1–M11)</h4>
+    <div class="mp-sub">Answer Yes, No or N/A for every item (N/A counts as met). ${MIN_THRESHOLD} or more Yes / N/A earns ${MIN_SCORE} points (up to ${MIN_SCORE} pts can be gained). With ${MIN_THRESHOLD - 1} or fewer the result is "No valid accreditation — Not meeting minimum requirement" and scores 0.</div>` +
     MIN_CRITERIA.map(m => `<div class="mc-row">
       <div class="mc-id">${m.id}</div>
       <div><div class="mc-std">${m.std}</div><div class="mc-ev">Evidence: ${m.ev}</div></div>
@@ -1183,7 +1193,7 @@ function setupQualityAutoScore(container){
         <label><input type="radio" name="minc_${m.id}" value="N/A"> N/A</label>
       </div></div>`).join("") +
     `<div class="mc-result pending" id="mcResult"></div>`;
-  note.insertAdjacentElement("afterend", panel);
+  container.appendChild(panel);
 
   function evalMin(){
     const st = minCriteriaState();
@@ -1204,36 +1214,88 @@ function setupQualityAutoScore(container){
     });
   });
 
+  // ---- 3. the three quality sub-sections (manual, or auto-filled for Full NABH onwards) ----
+  rest.forEach(sp => renderSubparamBlock(container, sp, "qual", state.answers.quality));
+
+  function clearAuto(){
+    note.classList.add("hidden");
+    if(!autoFilled) return;
+    targetIds.forEach(id => {
+      container.querySelectorAll(`input[name="qual_${id}"]`).forEach(r => { r.checked = false; });
+      delete state.answers.quality[id];
+    });
+    autoFilled = false;
+  }
   function autoFill(accPts){
-    note.textContent = `⚡ This accreditation auto-fills the top score for Infection Control, Clinical Governance and Patient Safety & Outcome Monitoring below — Quality & Accreditation total ${accPts + restMax} / 35. You may override any of them manually.`;
+    note.textContent = `⚡ This accreditation auto-fills the full score for Infection Control, Clinical Governance and Patient Safety & Outcome Monitoring below — Quality & Accreditation total ${accPts + restMax} / 35.`;
     note.classList.remove("hidden");
     targetIds.forEach(id => {
-      const sp = QUALITY_SUBPARAMS.find(s => s.id === id);
+      const sp = rest.find(s => s.id === id);
       const radio = document.getElementById(`qual_${id}_${sp.options.length - 1}`);
-      if(radio && !radio.checked){
+      if(radio){
         radio.checked = true;
         radio.dispatchEvent(new Event("change"));
       }
     });
+    autoFilled = true;
   }
 
   acc.options.forEach((opt, i) => {
     const radio = document.getElementById(`qual_accreditation_${i}`);
     radio.addEventListener("change", () => {
       if(!radio.checked) return;
-      panel.classList.toggle("hidden", i !== minIdx);
-      if(i === minIdx) evalMin();
-      if(fullIdx.indexOf(i) !== -1) autoFill(opt.pts); else note.classList.add("hidden");
+      if(fullIdx.indexOf(i) !== -1) autoFill(opt.pts); else clearAuto();
+    });
+  });
+
+  gate.querySelectorAll('input[name="qualHasAcc"]').forEach(r => {
+    r.addEventListener("change", () => {
+      if(!r.checked) return;
+      state.accGate = r.value;
+      clearAuto();
+      accWrap.querySelectorAll('input[name="qual_accreditation"]').forEach(x => { x.checked = false; });
+      delete state.answers.quality.accreditation;
+      if(r.value === "Yes"){
+        accWrap.classList.remove("hidden");
+        panel.classList.add("hidden");
+      } else {
+        accWrap.classList.add("hidden");
+        panel.classList.remove("hidden");
+        evalMin();
+      }
     });
   });
 }
 
 /* =========================================================================
-   RENDER: Geography (Section IV) — manual tier selection
+   RENDER: Geography (Section IV) — tier auto-filled from State / District
    ========================================================================= */
 function renderGeoSection(){
   const container = document.getElementById("geoContainer");
   container.innerHTML = "";
+  const st = document.getElementById("state").value;
+  const dist = document.getElementById("district").value;
+  const key = st + "|" + dist;
+  const autoIdx = suggestGeoIdx(st, dist);
+
+  // re-apply the suggestion unless the user already overrode it for this same location
+  if(autoIdx !== null && state.geoManualKey !== key){
+    state.answers.geography = { pts: GEO_OPTIONS[autoIdx].pts, label: GEO_OPTIONS[autoIdx].label };
+    state.geoManualKey = null;
+  }
+
+  const note = document.createElement("div");
+  note.className = "auto-note";
+  function setNote(manual){
+    if(autoIdx === null){ note.classList.add("hidden"); return; }
+    note.classList.remove("hidden");
+    note.textContent = manual
+      ? `You have changed the suggested tier for ${dist}, ${st}. (Suggested: ${GEO_OPTIONS[autoIdx].label} — ${GEO_OPTIONS[autoIdx].pts} pts.)`
+      : `⚡ Auto-filled from the location entered in Section I (${dist}, ${st}): ${GEO_OPTIONS[autoIdx].label} — ${GEO_OPTIONS[autoIdx].pts} pts. You may change it if the CGHS city tier of your facility differs.`;
+  }
+  container.appendChild(note);
+  setNote(state.geoManualKey === key);
+
   const div = document.createElement("div");
   div.className = "subparam";
   div.innerHTML = `<div class="sp-head"><span class="sp-name">Location Tier</span><span class="sp-cap">up to 15 pts</span></div>`;
@@ -1247,6 +1309,9 @@ function renderGeoSection(){
     }
     row.querySelector("input").addEventListener("change", () => {
       state.answers.geography = { pts: opt.pts, label: opt.label };
+      const manual = (autoIdx !== null && idx !== autoIdx);
+      state.geoManualKey = manual ? key : null;
+      setNote(manual);
     });
     div.appendChild(row);
   });
@@ -1316,6 +1381,7 @@ document.getElementById("mobile").addEventListener("input", e => {
 function renderDigitalSection(){
   const container = document.getElementById("digitalContainer");
   container.innerHTML = "";
+  state.answers.digital = {};
   DIGITAL_SUBPARAMS.forEach(sp => renderSubparamBlock(container, sp, "dig", state.answers.digital));
 }
 
@@ -1443,9 +1509,9 @@ document.querySelectorAll("[data-next]").forEach(btn => {
       const emailEl = document.getElementById("email");
       if(!isValidEmail(emailEl.value)){ emailEl.focus(); alert("Please enter a valid email address."); return; }
     }
-    if(n === 7 && minCriteriaIncomplete()){
-      alert("Please answer all minimum-criteria items (M1–M11) for the accreditation option you selected.");
-      return;
+    if(n === 7){
+      const msg = qualityGateMessage();
+      if(msg){ alert(msg); return; }
     }
     goToStep(n);
   });
@@ -1565,7 +1631,7 @@ function collectPayload(scores){
     geographyTier: state.answers.geography ? state.answers.geography.label : "",
     digitalScore: scores.digitalScore,
     digitalHmis: fmtEntry(state.answers.digital.d5_1),
-    digitalAbdmNhcx: ["d5_2","d5_3","d5_4","d5_5"].map(k => fmtEntry(state.answers.digital[k])).join(" | "),
+    digitalAbdmNhcx: ["d5_2","d5_3","d5_4"].map(k => fmtEntry(state.answers.digital[k])).join(" | "),
     totalScore: scores.isOthers ? "Pending Manual Review" : scores.total,
     categoryBand: scores.isOthers ? "Pending Manual Review" : scores.band.code,
     empanelledRetail: radioVal("empanelledRetail"),
@@ -1576,7 +1642,7 @@ function collectPayload(scores){
     crisilScore: val("crisilScore"),
     patientFeedback: radioVal("patientFeedback"),
     declarationConfirmed: document.getElementById("declarationConfirm").checked,
-    answersDetailJson: JSON.stringify(Object.assign({}, state.answers, { registeredBeds: state.registeredBeds, routedFacilityType: state.facilityType, singleSubtype: state.singleSubtype })),
+    answersDetailJson: JSON.stringify(Object.assign({}, state.answers, { registeredBeds: state.registeredBeds, routedFacilityType: state.facilityType, singleSubtype: state.singleSubtype, hasValidAccreditation: state.accGate })),
     documents: state.documents,
   };
 }
